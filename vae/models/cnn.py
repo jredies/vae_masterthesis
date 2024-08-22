@@ -245,7 +245,7 @@ def run_experiment(gamma: float, path: str):
         gamma=gamma,
         plateau_patience=7,
         patience=15,
-        epochs=400,
+        epochs=3,
         scheduler_type="plateau",
     )
     model_save_path = path / (model_name + ".pth")
