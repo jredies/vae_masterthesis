@@ -144,3 +144,4 @@ outputs/*
 *.gz
 notebooks/data/MNIST/raw/*
 notebooks/*.pdf
+notebooks/*.ipynb
