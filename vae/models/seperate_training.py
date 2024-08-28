@@ -1,4 +1,5 @@
 import pathlib
+import itertools
 import typing
 import logging
 
@@ -23,6 +24,7 @@ from vae.models.training import (
     create_vae_model,
     write_all_stats,
     update_scheduler,
+    standard_loss,
 )
 from vae.models.loss import iwae_loss_fast, standard_loss
 
@@ -34,7 +36,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def training_step(
+def training_step_mixed(
     input_dim: int,
     device: str,
     vae: nn.Module,
@@ -44,55 +46,52 @@ def training_step(
     latent_noise: float = 0.0,
     cnn=False,
     iw_samples: int = 5,
-    beta=0.1,
-) -> typing.Tuple[float, float]:
+):
     data = get_view(device=device, input_dim=input_dim, x=data, cnn=cnn)
-    recon_x, mu, logvar = vae.forward(x=data, noise_parameter=latent_noise)
-    vae_loss_enc = standard_loss(x_recon=recon_x, x=data, mu=mu, logvar=logvar, cnn=cnn)
-    iwae_loss = iwae_loss_fast(model=vae, x=data, num_samples=iw_samples)
 
-    # Combined PIWAE Loss for the encoder
-    piwae_loss = beta * vae_loss_enc + (1 - beta) * iwae_loss
     optimizer_enc.zero_grad()
-    piwae_loss.backward()
-    optimizer_enc.step()
-
-    # VAE Loss for the decoder
-    vae_loss_dec = standard_loss(x_recon=recon_x, x=data, mu=mu, logvar=logvar, cnn=cnn)
     optimizer_dec.zero_grad()
-    vae_loss_dec.backward()
-    optimizer_dec.step()
 
-    return piwae_loss.item(), vae_loss_dec.item()
-
-
-def training_step(
-    input_dim: int,
-    device: str,
-    vae: nn.Module,
-    optimizer_dec: torch.optim.Optimizer,
-    optimizer_enc: torch.optim.Optimizer,
-    data: typing.Any,
-    latent_noise: float = 0.0,
-    cnn=False,
-    iw_samples: int = 5,
-) -> typing.Tuple[float, float]:
-    data = get_view(device=device, input_dim=input_dim, x=data, cnn=cnn)
-
-    # Forward pass
-    recon_x, mu, logvar = vae.forward(x=data, noise_parameter=latent_noise)
+    x_recon, mu, logvar = vae.forward(x=data, noise_parameter=latent_noise)
 
     # IWAE Loss for the encoder
     iwae_loss = iwae_loss_fast(model=vae, x=data, num_samples=iw_samples)
-    optimizer_enc.zero_grad()
     iwae_loss.backward()
-    optimizer_enc.step()
 
     # VAE Loss for the decoder
-    vae_loss = standard_loss(x_recon=recon_x, x=data, mu=mu, logvar=logvar, cnn=cnn)
-    optimizer_dec.zero_grad()
+    vae_loss = standard_loss(x_recon=x_recon, x=data, mu=mu, logvar=logvar, cnn=cnn)
     vae_loss.backward(retain_graph=True)
+
     optimizer_dec.step()
+    optimizer_enc.step()
+
+
+def training_step_iwae(
+    input_dim: int,
+    device: str,
+    vae: nn.Module,
+    optimizer_dec: torch.optim.Optimizer,
+    optimizer_enc: torch.optim.Optimizer,
+    data: typing.Any,
+    cnn=False,
+    iw_samples: int = 5,
+):
+
+    data = get_view(device=device, input_dim=input_dim, x=data, cnn=cnn)
+
+    optimizer_enc.zero_grad()
+    optimizer_dec.zero_grad()
+
+    # IWAE Loss for the encoder
+    iwae_loss1 = iwae_loss_fast(model=vae, x=data, num_samples=iw_samples)
+    iwae_loss1.backward()
+
+    # VAE Loss for the decoder
+    iwae_loss2 = iwae_loss_fast(model=vae, x=data, num_samples=iw_samples)
+    iwae_loss2.backward(retain_graph=True)
+
+    optimizer_dec.step()
+    optimizer_enc.step()
 
 
 def train_vae(
@@ -112,6 +111,7 @@ def train_vae(
     gamma: float = 0.1,
     iw_samples: int = 5,
     cnn: bool = False,
+    train_method_str="mixed",
 ):
     device = select_device()
     vae = vae.to(device)
@@ -153,16 +153,28 @@ def train_vae(
     for epoch in range(epochs):
         vae.train()
         for _, (data, _) in enumerate(train_loader):
-            training_step(
-                input_dim=input_dim,
-                device=device,
-                vae=vae,
-                optimizer_dec=optimizer_dec,
-                optimizer_enc=optimizer_enc,
-                data=data,
-                cnn=cnn,
-                iw_samples=iw_samples,
-            )
+            if train_method_str == "mixed":
+                training_step_mixed(
+                    input_dim=input_dim,
+                    device=device,
+                    vae=vae,
+                    optimizer_dec=optimizer_dec,
+                    optimizer_enc=optimizer_enc,
+                    data=data,
+                    cnn=cnn,
+                    iw_samples=iw_samples,
+                )
+            elif train_method_str == "iwae":
+                training_step_iwae(
+                    input_dim=input_dim,
+                    device=device,
+                    vae=vae,
+                    optimizer_dec=optimizer_dec,
+                    optimizer_enc=optimizer_enc,
+                    data=data,
+                    cnn=cnn,
+                    iw_samples=iw_samples,
+                )
 
         vae.eval()
         kwargs = {
@@ -268,8 +280,12 @@ def train_vae(
             break
 
 
-def run_experiment(iw_samples, path):
-    n_layers = 4
+def run_experiment(
+    iw_samples: int,
+    train_method_str: str,
+    path: str,
+):
+    n_layers = 3
     geometry = "flat"
     latent_dim_factor = 0.2
 
@@ -284,7 +300,7 @@ def run_experiment(iw_samples, path):
     log.info(f"Running iw_samples: {iw_samples}.")
     log.info(f"Save model as {path}.")
 
-    model_name = f"sep_iwae_{iw_samples}_plog_k_500"
+    model_name = f"sep_{train_method_str}_iwae_{iw_samples}_plog_k_100"
 
     train_vae(
         vae=vae,
@@ -295,11 +311,12 @@ def run_experiment(iw_samples, path):
         model_path=path,
         file_name=model_name,
         iw_samples=iw_samples,
-        gamma=0.25,
+        gamma=0.1,
         plateau_patience=7,
         patience=15,
         epochs=400,
         scheduler_type="plateau",
+        train_method_str=train_method_str,
     )
 
     model_save_path = path / (model_name + ".pth")
@@ -325,13 +342,20 @@ def google_stuff() -> pathlib.Path:
 def main():
     path = google_stuff()
 
-    for x in list(
-        [
-            3,
-            10,
-        ]
-    ):
-        run_experiment(iw_samples=x, path=path)
+    params = itertools.product(
+        ["mixed", "iwae"],
+        [3, 10],
+    )
+
+    for train_method_str, iw_samples in params:
+        log.info(
+            f"Running for iw_samples {iw_samples}. Train method: {train_method_str}."
+        )
+        run_experiment(
+            iw_samples=iw_samples,
+            train_method_str=train_method_str,
+            path=path,
+        )
 
 
 if __name__ == "__main__":
