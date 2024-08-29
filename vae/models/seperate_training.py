@@ -27,6 +27,7 @@ from vae.models.training import (
     standard_loss,
 )
 from vae.models.loss import iwae_loss_fast, standard_loss
+from vae.models.cnn import CNN_VAE
 
 logging.basicConfig(
     level=logging.INFO,
@@ -270,7 +271,7 @@ def run_experiment(
     )
     log.info(f"Save model as {path}.")
 
-    model_name = f"sep_enc_{enc_loss}_dec_{dec_loss}_iw_{iw_samples}"
+    model_name = f"cnn_sep_enc_{enc_loss}_dec_{dec_loss}_iw_{iw_samples}"
 
     train_vae(
         vae=vae,
@@ -288,10 +289,52 @@ def run_experiment(
         scheduler_type="plateau",
         enc_loss=enc_loss,
         dec_loss=dec_loss,
+        cnn=True,
     )
 
     model_save_path = path / (model_name + ".pth")
     torch.save(vae.state_dict(), model_save_path)
+    log.info(f"Saved model to {model_save_path}.")
+
+
+def run_cnn_experiment(
+    iw_samples: int,
+    path: str,
+    enc_loss: str,
+    dec_loss: str,
+):
+    i = 5
+    latent_factor = 0.2
+    iw_samples = 0
+    train_loader, validation_loader, test_loader, dim = get_loaders()
+    length = np.prod(dim)
+    latent_dim = int(length * latent_factor)
+
+    model = CNN_VAE(latent_dim=latent_dim, i=i, spectral_norm=False)
+
+    log.info(f"Save model as {path}.")
+    model_name = f"cnn_sep_enc_{enc_loss}_dec_{dec_loss}_iw_{iw_samples}"
+
+    train_vae(
+        vae=model,
+        train_loader=train_loader,
+        validation_loader=validation_loader,
+        test_loader=test_loader,
+        dim=dim,
+        model_path=path,
+        file_name=model_name,
+        iw_samples=iw_samples,
+        gamma=0.1,
+        plateau_patience=7,
+        patience=15,
+        epochs=3,
+        scheduler_type="plateau",
+        enc_loss=enc_loss,
+        dec_loss=dec_loss,
+    )
+
+    model_save_path = path / (model_name + ".pth")
+    torch.save(model.state_dict(), model_save_path)
 
 
 def google_stuff() -> pathlib.Path:
