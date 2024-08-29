@@ -284,7 +284,7 @@ def run_experiment(
         gamma=0.1,
         plateau_patience=7,
         patience=15,
-        epochs=400,
+        epochs=3,
         scheduler_type="plateau",
         enc_loss=enc_loss,
         dec_loss=dec_loss,
