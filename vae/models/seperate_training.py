@@ -289,7 +289,7 @@ def run_experiment(
         scheduler_type="plateau",
         enc_loss=enc_loss,
         dec_loss=dec_loss,
-        cnn=True,
+        cnn=False,
     )
 
     model_save_path = path / (model_name + ".pth")
@@ -331,6 +331,7 @@ def run_cnn_experiment(
         scheduler_type="plateau",
         enc_loss=enc_loss,
         dec_loss=dec_loss,
+        cnn=True,
     )
 
     model_save_path = path / (model_name + ".pth")
