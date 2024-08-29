@@ -43,52 +43,31 @@ def training_step_mixed(
     optimizer_dec: torch.optim.Optimizer,
     optimizer_enc: torch.optim.Optimizer,
     data: typing.Any,
-    latent_noise: float = 0.0,
     cnn=False,
     iw_samples: int = 5,
+    enc_loss="iwae",
+    dec_loss="iwae",
 ):
     data = get_view(device=device, input_dim=input_dim, x=data, cnn=cnn)
-
-    optimizer_enc.zero_grad()
-    optimizer_dec.zero_grad()
-
-    x_recon, mu, logvar = vae.forward(x=data, noise_parameter=latent_noise)
-
-    # IWAE Loss for the encoder
+    x_recon, mu, logvar = vae.forward(x=data)
     iwae_loss = iwae_loss_fast(model=vae, x=data, num_samples=iw_samples)
-    iwae_loss.backward()
-
-    # VAE Loss for the decoder
     vae_loss = standard_loss(x_recon=x_recon, x=data, mu=mu, logvar=logvar, cnn=cnn)
-    vae_loss.backward(retain_graph=True)
-
-    optimizer_dec.step()
-    optimizer_enc.step()
-
-
-def training_step_iwae(
-    input_dim: int,
-    device: str,
-    vae: nn.Module,
-    optimizer_dec: torch.optim.Optimizer,
-    optimizer_enc: torch.optim.Optimizer,
-    data: typing.Any,
-    cnn=False,
-    iw_samples: int = 5,
-):
-
-    data = get_view(device=device, input_dim=input_dim, x=data, cnn=cnn)
 
     optimizer_enc.zero_grad()
+    if enc_loss == "iwae":
+        iwae_loss.backward(retain_graph=True)
+    elif enc_loss == "vae":
+        vae_loss.backward(retain_graph=True)
+    else:
+        raise ValueError(f"Unknown loss type {enc_loss}.")
+
     optimizer_dec.zero_grad()
-
-    # IWAE Loss for the encoder
-    iwae_loss1 = iwae_loss_fast(model=vae, x=data, num_samples=iw_samples)
-    iwae_loss1.backward()
-
-    # VAE Loss for the decoder
-    iwae_loss2 = iwae_loss_fast(model=vae, x=data, num_samples=iw_samples)
-    iwae_loss2.backward(retain_graph=True)
+    if dec_loss == "iwae":
+        iwae_loss.backward()
+    elif dec_loss == "vae":
+        vae_loss.backward()
+    else:
+        raise ValueError(f"Unknown loss type {dec_loss}.")
 
     optimizer_dec.step()
     optimizer_enc.step()
@@ -111,7 +90,8 @@ def train_vae(
     gamma: float = 0.1,
     iw_samples: int = 5,
     cnn: bool = False,
-    train_method_str="mixed",
+    enc_loss="iwae",
+    dec_loss="iwae",
 ):
     device = select_device()
     vae = vae.to(device)
@@ -153,28 +133,18 @@ def train_vae(
     for epoch in range(epochs):
         vae.train()
         for _, (data, _) in enumerate(train_loader):
-            if train_method_str == "mixed":
-                training_step_mixed(
-                    input_dim=input_dim,
-                    device=device,
-                    vae=vae,
-                    optimizer_dec=optimizer_dec,
-                    optimizer_enc=optimizer_enc,
-                    data=data,
-                    cnn=cnn,
-                    iw_samples=iw_samples,
-                )
-            elif train_method_str == "iwae":
-                training_step_iwae(
-                    input_dim=input_dim,
-                    device=device,
-                    vae=vae,
-                    optimizer_dec=optimizer_dec,
-                    optimizer_enc=optimizer_enc,
-                    data=data,
-                    cnn=cnn,
-                    iw_samples=iw_samples,
-                )
+            training_step_mixed(
+                input_dim=input_dim,
+                device=device,
+                vae=vae,
+                optimizer_dec=optimizer_dec,
+                optimizer_enc=optimizer_enc,
+                data=data,
+                cnn=cnn,
+                iw_samples=iw_samples,
+                enc_loss=enc_loss,
+                dec_loss=dec_loss,
+            )
 
         vae.eval()
         kwargs = {
@@ -282,10 +252,11 @@ def train_vae(
 
 def run_experiment(
     iw_samples: int,
-    train_method_str: str,
     path: str,
+    enc_loss: str,
+    dec_loss: str,
 ):
-    n_layers = 3
+    n_layers = 4
     geometry = "flat"
     latent_dim_factor = 0.2
 
@@ -297,10 +268,9 @@ def run_experiment(
         geometry=geometry,
         latent_dim_factor=latent_dim_factor,
     )
-    log.info(f"Running iw_samples: {iw_samples}.")
     log.info(f"Save model as {path}.")
 
-    model_name = f"sep_{train_method_str}_iwae_{iw_samples}_plog_k_100"
+    model_name = f"sep_enc_{enc_loss}_dec_{dec_loss}_iw_{iw_samples}"
 
     train_vae(
         vae=vae,
@@ -316,7 +286,8 @@ def run_experiment(
         patience=15,
         epochs=400,
         scheduler_type="plateau",
-        train_method_str=train_method_str,
+        enc_loss=enc_loss,
+        dec_loss=dec_loss,
     )
 
     model_save_path = path / (model_name + ".pth")
@@ -342,19 +313,26 @@ def google_stuff() -> pathlib.Path:
 def main():
     path = google_stuff()
 
-    params = itertools.product(
-        ["mixed", "iwae"],
-        [3, 10],
-    )
+    params = [
+        ("iwae", "iwae", 10),
+        ("iwae", "vae", 10),
+        ("vae", "iwae", 10),
+        ("iwae", "iwae", 30),
+        ("iwae", "vae", 30),
+        ("vae", "iwae", 30),
+    ]
 
-    for train_method_str, iw_samples in params:
-        log.info(
-            f"Running for iw_samples {iw_samples}. Train method: {train_method_str}."
-        )
+    for enc_loss, denc_loss, iw_samples in params:
+
+        log.info(f"Running experiment with iw_samples {iw_samples}.")
+        log.info(f"Running experiment with enc_loss {enc_loss}.")
+        log.info(f"Running experiment with dec_loss {denc_loss}.")
+
         run_experiment(
             iw_samples=iw_samples,
-            train_method_str=train_method_str,
             path=path,
+            enc_loss=enc_loss,
+            dec_loss=denc_loss,
         )
 
 

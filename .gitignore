@@ -145,3 +145,4 @@ outputs/*
 notebooks/data/MNIST/raw/*
 notebooks/*.pdf
 notebooks/*.ipynb
+notebooks/results/*
