@@ -210,7 +210,8 @@ def train_vae(
 
         epoch_mod = epoch % 50 == 0
 
-        if early_stopping or epoch_mod:
+        # if early_stopping or epoch_mod:
+        if False:
             kwargs = {
                 "model": vae,
                 "device": device,
@@ -327,7 +328,7 @@ def run_cnn_experiment(
         gamma=0.1,
         plateau_patience=7,
         patience=15,
-        epochs=3,
+        epochs=1,
         scheduler_type="plateau",
         enc_loss=enc_loss,
         dec_loss=dec_loss,
