@@ -126,9 +126,6 @@ def training_step_mixed_cnn(
 ):
     x = get_view(device=device, input_dim=input_dim, x=x, cnn=True)
 
-    if x.dim() > 2:
-        x = x.view(x.size(0), -1)
-
     x_recon, mu, logvar = vae.forward(x=x)
     iwae_loss = iwae_loss_fast_cnn(model=vae, x=x, num_samples=iw_samples)
     vae_loss = standard_loss(x_recon=x_recon, x=x, mu=mu, logvar=logvar, cnn=True)
