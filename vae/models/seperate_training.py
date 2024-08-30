@@ -343,10 +343,10 @@ def google_stuff() -> pathlib.Path:
     try:
         from google.colab import drive
 
-        drive.mount("/content/drive/space")
+        drive.mount("/content/drive/")
 
         log.info("Running on Google Colab.")
-        save_path = "/content/drive/space/thesis/data/"
+        save_path = "/content/drive/thesis/data/"
         pathlib.Path(save_path).mkdir(parents=True, exist_ok=True)
         return pathlib.Path(save_path)
 
