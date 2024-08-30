@@ -1,3 +1,4 @@
+import sys
 import pathlib
 import typing
 import logging
@@ -25,9 +26,10 @@ from vae.models.training import (
     update_scheduler,
     standard_loss,
 )
-from vae.models.loss import iwae_loss_fast, standard_loss
+from vae.models.loss import iwae_loss_fast, standard_loss, iwae_loss_fast_cnn
 from vae.models.cnn import CNN_VAE
-from vae.models.google import return_output_folder
+from vae.models.google_path import return_output_folder
+from vae.utils import exception_hook
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,15 +46,92 @@ def training_step_mixed(
     optimizer_dec: torch.optim.Optimizer,
     optimizer_enc: torch.optim.Optimizer,
     data: typing.Any,
-    cnn=False,
+    iw_samples: int = 5,
+    enc_loss="iwae",
+    dec_loss="iwae",
+    cnn: bool = False,
+):
+    if cnn:
+        training_step_mixed_cnn(
+            input_dim=input_dim,
+            device=device,
+            vae=vae,
+            optimizer_dec=optimizer_dec,
+            optimizer_enc=optimizer_enc,
+            x=data,
+            iw_samples=iw_samples,
+            enc_loss=enc_loss,
+            dec_loss=dec_loss,
+        )
+    else:
+        training_step_mixed_flat(
+            input_dim=input_dim,
+            device=device,
+            vae=vae,
+            optimizer_dec=optimizer_dec,
+            optimizer_enc=optimizer_enc,
+            data=data,
+            iw_samples=iw_samples,
+            enc_loss=enc_loss,
+            dec_loss=dec_loss,
+        )
+
+
+def training_step_mixed_flat(
+    input_dim: int,
+    device: str,
+    vae: nn.Module,
+    optimizer_dec: torch.optim.Optimizer,
+    optimizer_enc: torch.optim.Optimizer,
+    data: typing.Any,
     iw_samples: int = 5,
     enc_loss="iwae",
     dec_loss="iwae",
 ):
-    data = get_view(device=device, input_dim=input_dim, x=data, cnn=cnn)
+    data = get_view(device=device, input_dim=input_dim, x=data, cnn=False)
     x_recon, mu, logvar = vae.forward(x=data)
     iwae_loss = iwae_loss_fast(model=vae, x=data, num_samples=iw_samples)
-    vae_loss = standard_loss(x_recon=x_recon, x=data, mu=mu, logvar=logvar, cnn=cnn)
+    vae_loss = standard_loss(x_recon=x_recon, x=data, mu=mu, logvar=logvar, cnn=False)
+
+    optimizer_enc.zero_grad()
+    if enc_loss == "iwae":
+        iwae_loss.backward(retain_graph=True)
+    elif enc_loss == "vae":
+        vae_loss.backward(retain_graph=True)
+    else:
+        raise ValueError(f"Unknown loss type {enc_loss}.")
+
+    optimizer_dec.zero_grad()
+    if dec_loss == "iwae":
+        iwae_loss.backward()
+    elif dec_loss == "vae":
+        vae_loss.backward()
+    else:
+        raise ValueError(f"Unknown loss type {dec_loss}.")
+
+    optimizer_dec.step()
+    optimizer_enc.step()
+
+
+def training_step_mixed_cnn(
+    input_dim: int,
+    device: str,
+    vae: nn.Module,
+    optimizer_dec: torch.optim.Optimizer,
+    optimizer_enc: torch.optim.Optimizer,
+    x: typing.Any,
+    iw_samples: int = 5,
+    enc_loss="iwae",
+    dec_loss="iwae",
+):
+    x = get_view(device=device, input_dim=input_dim, x=x, cnn=True)
+
+    if x.dim() > 2:
+        x = x.view(x.size(0), -1)
+
+    x_recon, mu, logvar = vae.forward(x=x)
+    iwae_loss = iwae_loss_fast_cnn(model=vae, x=x, num_samples=iw_samples)
+    vae_loss = standard_loss(x_recon=x_recon, x=x, mu=mu, logvar=logvar, cnn=True)
 
     optimizer_enc.zero_grad()
     if enc_loss == "iwae":
@@ -210,8 +289,7 @@ def train_vae(
 
         epoch_mod = epoch % 50 == 0
 
-        # if early_stopping or epoch_mod:
-        if False:
+        if (early_stopping or epoch_mod) and (epoch > 0):
             kwargs = {
                 "model": vae,
                 "device": device,
@@ -328,7 +406,7 @@ def run_cnn_experiment(
         gamma=0.1,
         plateau_patience=7,
         patience=15,
-        epochs=1,
+        epochs=3,
         scheduler_type="plateau",
         enc_loss=enc_loss,
         dec_loss=dec_loss,
@@ -339,6 +417,9 @@ def run_cnn_experiment(
     torch.save(model.state_dict(), model_save_path)
 
 
+# sys.excepthook = exception_hook
+
+
 def main():
     path = return_output_folder()
 
@@ -346,9 +427,9 @@ def main():
         ("iwae", "iwae", 10),
         ("iwae", "vae", 10),
         ("vae", "iwae", 10),
-        ("iwae", "iwae", 30),
-        ("iwae", "vae", 30),
-        ("vae", "iwae", 30),
+        # ("iwae", "iwae", 30),
+        # ("iwae", "vae", 30),
+        # ("vae", "iwae", 30),
     ]
 
     for enc_loss, denc_loss, iw_samples in params:
@@ -357,7 +438,7 @@ def main():
         log.info(f"Running experiment with enc_loss {enc_loss}.")
         log.info(f"Running experiment with dec_loss {denc_loss}.")
 
-        run_experiment(
+        run_cnn_experiment(
             iw_samples=iw_samples,
             path=path,
             enc_loss=enc_loss,

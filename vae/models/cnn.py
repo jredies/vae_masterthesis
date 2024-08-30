@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 from vae.models.training import train_vae, get_loaders
-from vae.models.google import return_output_folder
+from vae.models.google_path import return_output_folder
 
 
 logging.basicConfig(

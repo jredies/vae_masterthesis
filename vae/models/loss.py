@@ -33,13 +33,22 @@ def standard_loss(
     return elbo
 
 
-def reconstruction_loss(x_recon, x, **kwargs) -> float:
+def reconstruction_loss(
+    x_recon,
+    x,
+    **kwargs,
+) -> float:
     ret = F.binary_cross_entropy(x_recon, x, reduction="sum")
     ret = ret / x.size(0)
     return ret
 
 
-def iwae_loss_fast(model: nn.Module, x, num_samples: int = 5, **kwargs) -> torch.tensor:
+def iwae_loss_fast(
+    model: nn.Module,
+    x,
+    num_samples: int = 5,
+    **kwargs,
+) -> torch.tensor:
     # Get the mean and log variance from the encoder
     mean, logvar = model.encoder(x)
     std = torch.exp(0.5 * logvar)
@@ -79,7 +88,10 @@ def iwae_loss_fast(model: nn.Module, x, num_samples: int = 5, **kwargs) -> torch
 
 
 def iwae_loss_fast_cnn(
-    model: nn.Module, x, num_samples: int = 5, **kwargs
+    model: nn.Module,
+    x,
+    num_samples: int = 5,
+    **kwargs,
 ) -> torch.tensor:
     # Flatten x if it is not already flattened
     if x.dim() > 2:

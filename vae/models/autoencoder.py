@@ -11,7 +11,7 @@ import torch
 from vae.models.simple_vae import create_vae_model
 from vae.models.training import train_vae, get_loaders
 from vae.utils import exception_hook, model_path
-from vae.models.google import return_output_folder
+from vae.models.google_path import return_output_folder
 
 logging.basicConfig(
     level=logging.INFO,
