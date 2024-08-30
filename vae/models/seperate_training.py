@@ -341,7 +341,13 @@ def run_cnn_experiment(
 
 def google_stuff() -> pathlib.Path:
     try:
+        from IPython import get_ipython
         from google.colab import drive
+
+        if get_ipython() is None:
+            from IPython import start_ipython
+
+            start_ipython()
 
         drive.mount("/content/drive/")
 
