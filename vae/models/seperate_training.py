@@ -1,5 +1,4 @@
 import pathlib
-import itertools
 import typing
 import logging
 
@@ -28,6 +27,7 @@ from vae.models.training import (
 )
 from vae.models.loss import iwae_loss_fast, standard_loss
 from vae.models.cnn import CNN_VAE
+from vae.models.google import return_output_folder
 
 logging.basicConfig(
     level=logging.INFO,
@@ -339,24 +339,8 @@ def run_cnn_experiment(
     torch.save(model.state_dict(), model_save_path)
 
 
-def google_stuff() -> pathlib.Path:
-    try:
-        from google.colab import drive
-
-        log.info("Running on Google Colab.")
-        save_path = "/content/drive/thesis/data/"
-        pathlib.Path(save_path).mkdir(parents=True, exist_ok=True)
-        return pathlib.Path(save_path)
-
-    except ImportError:
-        log.info("Not running on Google Colab.")
-        path = "/Users/joachim/Library/Mobile Documents/com~apple~CloudDocs/thesis/data"
-        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-        return pathlib.Path(path)
-
-
 def main():
-    path = google_stuff()
+    path = return_output_folder()
 
     params = [
         ("iwae", "iwae", 10),

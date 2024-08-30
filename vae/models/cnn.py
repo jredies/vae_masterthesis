@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 
 from vae.models.training import train_vae, get_loaders
+from vae.models.google import return_output_folder
 
 
 logging.basicConfig(
@@ -252,26 +253,8 @@ def run_experiment(gamma: float, path: str):
     torch.save(model.state_dict(), model_save_path)
 
 
-def google_stuff() -> pathlib.Path:
-    try:
-        log.info("Trying to run on Google Colab.")
-        from google.colab import drive
-
-        log.info("Running on Google Colab.")
-        save_path = "/content/drive/My Drive/thesis/data/"
-        pathlib.Path(save_path).mkdir(parents=True, exist_ok=True)
-        return pathlib.Path(save_path)
-
-    except ImportError:
-        log.info("Not running on Google Colab.")
-        path = "/Users/joachim/Library/Mobile Documents/com~apple~CloudDocs/thesis/data"
-        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-
-        return pathlib.Path(path)
-
-
 def main():
-    path = google_stuff()
+    path = return_output_folder()
 
     for gamma in [0.1, 1.0]:
         run_experiment(gamma=gamma, path=path)
