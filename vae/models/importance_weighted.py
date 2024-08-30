@@ -75,7 +75,7 @@ def main():
     )
 
 
-sys.excepthook = exception_hook
+# sys.excepthook = exception_hook
 
 
 if __name__ == "__main__":

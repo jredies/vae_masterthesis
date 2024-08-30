@@ -633,7 +633,7 @@ def log_training_epoch(
     log.info(output_string)
 
 
-sys.excepthook = exception_hook
+# sys.excepthook = exception_hook
 
 
 def main():

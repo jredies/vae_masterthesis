@@ -63,7 +63,7 @@ def run_experiment(
     torch.save(vae.state_dict(), model_save_path)
 
 
-sys.excepthook = exception_hook
+# sys.excepthook = exception_hook
 
 
 def google_stuff() -> pathlib.Path:

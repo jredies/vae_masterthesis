@@ -9,11 +9,8 @@ import torch
 
 
 def exception_hook(exc_type, exc_value, exc_traceback):
-    # Print the exception
     print("Uncaught exception:", exc_value, file=sys.stderr)
-    # Print the traceback
     traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
-    # Enter the post-mortem debugger
     ipdb.post_mortem(exc_traceback)
 
 
