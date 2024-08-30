@@ -163,7 +163,13 @@ class CNN_Decoder(nn.Module):
 
 
 class CNN_VAE(nn.Module):
-    def __init__(self, iw_samples=0, latent_dim=50, i=1, spectral_norm=False):
+    def __init__(
+        self,
+        iw_samples=0,
+        latent_dim=50,
+        i=1,
+        spectral_norm=False,
+    ):
         super(CNN_VAE, self).__init__()
         self.spectral_norm = spectral_norm
 

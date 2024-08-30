@@ -381,12 +381,11 @@ def run_cnn_experiment(
 ):
     i = 5
     latent_factor = 0.2
-    iw_samples = 0
     train_loader, validation_loader, test_loader, dim = get_loaders()
     length = np.prod(dim)
     latent_dim = int(length * latent_factor)
 
-    model = CNN_VAE(latent_dim=latent_dim, i=i, spectral_norm=False)
+    model = CNN_VAE(latent_dim=latent_dim, i=i)
 
     log.info(f"Save model as {path}.")
     model_name = f"cnn_sep_enc_{enc_loss}_dec_{dec_loss}_iw_{iw_samples}"
@@ -414,7 +413,7 @@ def run_cnn_experiment(
     torch.save(model.state_dict(), model_save_path)
 
 
-# sys.excepthook = exception_hook
+sys.excepthook = exception_hook
 
 
 def main():

@@ -93,6 +93,8 @@ def iwae_loss_fast_cnn(
     num_samples: int = 5,
     **kwargs,
 ) -> torch.tensor:
+    assert num_samples >= 1, "Number of samples must be at least 1"
+
     # Flatten x if it is not already flattened
     if x.dim() > 2:
         x = x.view(x.size(0), -1)
